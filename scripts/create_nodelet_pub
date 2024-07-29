@@ -1,0 +1,121 @@
+#!/bin/bash
+
+echo "This will create ROS Composable node C++ for You."
+
+# Create your_program.cpp
+echo "To create nodelet publisher ( C++ ),, "
+read -p "Please Enter file name : " file_name
+touch $file_name.cpp
+
+echo "#include <nodelet/nodelet.h>"                                                      >> $file_name.cpp
+echo "#include <ros/ros.h>"                                                              >> $file_name.cpp
+echo "#include <pluginlib/class_list_macros.h>"                                          >> $file_name.cpp
+echo "#include <sstream>"                                                                >> $file_name.cpp
+
+# acquire
+read -p "Enter Header for Publisher ( example: std_msgs/String ): " pub_header
+read -p "Enter Package Name ( example: rom_dynamics ): " pkg_name
+read -p "Enter Class Name ( example: Talker ): " class_name
+read -p "Enter Publisher topic name ( example: my_integer ): " topic_name
+ns_name=$pkg_name
+
+# Header string to template ( std_msgs/msg/int32 to std_msgs::msg::Int32 )
+# set IFS (Internal Field Separator) to comma
+IFS='/' read -r -a array <<< "$pub_header"
+my_array=()
+for element in "${array[@]}"
+do
+    my_array+=("$element")
+done
+# echo ${my_array[2]}
+# Change Last element first Character to Captical Character
+first_str=${my_array[0]}
+last_str=${my_array[1]}
+#Last_str="$(tr '[:lower:]' '[:upper:]' <<< "${last_str:0:1}")${last_str:1}"
+
+echo "#include <$pub_header.h>"                                                         >> $file_name.cpp
+echo " "                                                                                >> $file_name.cpp
+
+# class
+echo -e "namespace $ns_name"                                                            >> $file_name.cpp
+echo -e "{"                                                                             >> $file_name.cpp # start ns
+echo -e "\tclass $class_name : public nodelet::Nodelet"                                 >> $file_name.cpp
+echo -e "\t{"                                                                           >> $file_name.cpp # start Class
+echo -e "\t\tpublic:"                                                                   >> $file_name.cpp
+echo -e "\t\t\t$class_name() {}"                                                        >> $file_name.cpp
+echo -e "\t\t\t~$class_name() {}"                                                       >> $file_name.cpp
+echo -e "\t\tprivate:"                                                                  >> $file_name.cpp
+
+echo -e "\t\t\tvirtual void onInit()"                                                     >> $file_name.cpp
+echo -e "\t\t\t{"                                                                         >> $file_name.cpp
+echo -e "\t\t\t\t//ros::NodeHandle& nh = getNodeHandle();"                                >> $file_name.cpp
+echo -e "\t\t\t\t//ros::NodeHandle& nh = getMTNodeHandle();"                              >> $file_name.cpp
+echo -e "\t\t\t\t//ros::NodeHandle& nh = getMTPrivateNodeHandle();"                       >> $file_name.cpp
+echo -e "\t\t\t\tros::NodeHandle& private_nh = getPrivateNodeHandle();"                   >> $file_name.cpp
+echo -e "\t\t\t\tpub_ = private_nh.advertise<$first_str::$last_str>(\"$topic_name\", 10);">> $file_name.cpp
+
+# add subscriber
+echo -e "\t\t\t\ttimer_ = private_nh.createTimer(ros::Duration(1.0), &$class_name::timerCallback, this);" >> $file_name.cpp
+echo -e "\t\t\t\tNODELET_INFO(\"PublisherNodelet has been initialized\");"                >> $file_name.cpp
+echo -e "\t\t\t}"                                                                         >> $file_name.cpp
+
+echo -e "\t\t\tvoid timerCallback(const ros::TimerEvent&)"                                >> $file_name.cpp
+echo -e "\t\t\t{"                                                                         >> $file_name.cpp
+echo -e "\t\t\t\t$first_str::$last_str msg;"                                              >> $file_name.cpp
+echo -e "\t\t\t\tpub_.publish(msg);"                                                      >> $file_name.cpp
+echo -e "\t\t\t}"                                                                         >> $file_name.cpp
+echo -e "\t\t\tros::Publisher pub_;"                                                      >> $file_name.cpp
+echo -e "\t\t\tros::Timer timer_;"                                                        >> $file_name.cpp
+
+echo -e "\t};"                                                                          >> $file_name.cpp # end class
+echo -e "}"                                                                             >> $file_name.cpp # end ns
+
+echo " "                                                                                >> $file_name.cpp
+echo -e "PLUGINLIB_EXPORT_CLASS($ns_name::$class_name, nodelet::Nodelet)"               >> $file_name.cpp
+
+
+echo " "
+echo "--------- Create nodelet_plugins.xml in your package. -----------"
+echo "*****************************************************************"
+echo " "
+echo -e "<library path=\"lib/lib$ns_name\">"
+echo -e "\t<class name=\"$ns_name/$class_name\""
+echo -e "\t\t\ttype=\"$ns_name::$class_name\""
+echo -e "\t\t\tbase_class_type=\"nodelet::Nodelet\">"
+echo -e "\t\t<description>"
+echo -e "\t\t\tThis nodelet receives a message and publishes it."
+echo -e "\t\t</description>"
+echo -e "\t</class>"
+echo -e "</library>"
+echo " "
+echo "------------------------------ END ------------------------------"
+echo " "
+echo " "
+echo "------- Add these lines to package.xml of your package. ---------"
+echo "*****************************************************************"
+echo " "
+echo -e "<export>"
+echo -e "\t<nodelet plugin=\"\${prefix}/nodelet_plugins.xml\" />"
+echo -e "</export>"
+echo " "
+echo "------------------------------ END ------------------------------"
+echo " "
+echo " "
+echo "------ Add these lines to CMakeLists.txt of your package. -------"
+echo "*****************************************************************"
+echo " "
+echo -e "add_library($pkg_name src/$file_name.cpp)"
+echo -e "target_link_libraries($pkg_name \${catkin_LIBRARIES})"
+echo " "
+echo "------------------------------ END ------------------------------"
+echo " "
+echo " "
+echo "--------------------- Create Launch File  -----------------------"
+echo "*****************************************************************"
+echo " "
+echo -e "<launch>"
+echo -e "\t<node pkg=\"nodelet\" type=\"nodelet\" name=\"rom_container\" args=\"manager\" output=\"screen\"/>"
+echo -e "\t<node pkg=\"nodelet\" type=\"nodelet\" name=\"Hello1\" args=\"load $pkg_name/$class_name rom_container\" output=\"screen\"/>"
+echo -e "</launch>"
+echo " "
+echo "------------------------------ END ------------------------------"
